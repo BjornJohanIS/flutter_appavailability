@@ -24,7 +24,6 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 
-/** AppAvailability plugin using Flutter V2 embedding */
 public class AppAvailability implements FlutterPlugin, MethodCallHandler, ActivityAware {
 
     private MethodChannel channel;
@@ -32,14 +31,14 @@ public class AppAvailability implements FlutterPlugin, MethodCallHandler, Activi
     private Activity activity;
 
     @Override
-    public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
-        context = flutterPluginBinding.getApplicationContext();
-        channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "com.pichillilorenzo/flutter_appavailability");
+    public void onAttachedToEngine(@NonNull FlutterPlugin.FlutterPluginBinding binding) {
+        context = binding.getApplicationContext();
+        channel = new MethodChannel(binding.getBinaryMessenger(), "com.pichillilorenzo/flutter_appavailability");
         channel.setMethodCallHandler(this);
     }
 
     @Override
-    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+    public void onDetachedFromEngine(@NonNull FlutterPlugin.FlutterPluginBinding binding) {
         channel.setMethodCallHandler(null);
         channel = null;
     }
@@ -66,55 +65,53 @@ public class AppAvailability implements FlutterPlugin, MethodCallHandler, Activi
 
     @Override
     public void onMethodCall(MethodCall call, Result result) {
-        String uriSchema;
+        String uri;
         switch (call.method) {
             case "checkAvailability":
-                uriSchema = call.argument("uri").toString();
-                checkAvailability(uriSchema, result);
+                uri = call.argument("uri");
+                checkAvailability(uri, result);
                 break;
             case "getInstalledApps":
                 result.success(getInstalledApps());
                 break;
             case "isAppEnabled":
-                uriSchema = call.argument("uri").toString();
-                isAppEnabled(uriSchema, result);
+                uri = call.argument("uri");
+                isAppEnabled(uri, result);
                 break;
             case "launchApp":
-                uriSchema = call.argument("uri").toString();
-                launchApp(uriSchema, result);
+                uri = call.argument("uri");
+                launchApp(uri, result);
                 break;
             default:
                 result.notImplemented();
         }
     }
 
-    private void checkAvailability(String uri, Result result) {
-        PackageInfo info = getAppPackageInfo(uri);
+    private void checkAvailability(String packageName, Result result) {
+        PackageInfo info = getAppPackageInfo(packageName);
         if (info != null) {
             result.success(convertPackageInfoToJson(info));
-            return;
+        } else {
+            result.error("", "App not found: " + packageName, null);
         }
-        result.error("", "App not found " + uri, null);
     }
 
     private List<Map<String, Object>> getInstalledApps() {
-        PackageManager packageManager = context.getPackageManager();
-        List<PackageInfo> apps = packageManager.getInstalledPackages(0);
-        List<Map<String, Object>> installedApps = new ArrayList<>(apps.size());
+        PackageManager pm = context.getPackageManager();
+        List<PackageInfo> packages = pm.getInstalledPackages(0);
+        List<Map<String, Object>> apps = new ArrayList<>();
         int systemAppMask = ApplicationInfo.FLAG_SYSTEM | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP;
 
-        for (PackageInfo pInfo : apps) {
-            if ((pInfo.applicationInfo.flags & systemAppMask) != 0) {
-                continue;
-            }
-            installedApps.add(convertPackageInfoToJson(pInfo));
+        for (PackageInfo pkg : packages) {
+            if ((pkg.applicationInfo.flags & systemAppMask) != 0) continue;
+            apps.add(convertPackageInfoToJson(pkg));
         }
-        return installedApps;
+        return apps;
     }
 
-    private PackageInfo getAppPackageInfo(String uri) {
+    private PackageInfo getAppPackageInfo(String packageName) {
         try {
-            return context.getPackageManager().getPackageInfo(uri, PackageManager.GET_ACTIVITIES);
+            return context.getPackageManager().getPackageInfo(packageName, PackageManager.GET_ACTIVITIES);
         } catch (PackageManager.NameNotFoundException e) {
             return null;
         }
@@ -130,15 +127,12 @@ public class AppAvailability implements FlutterPlugin, MethodCallHandler, Activi
     }
 
     private void isAppEnabled(String packageName, Result result) {
-        boolean appStatus = false;
         try {
             ApplicationInfo ai = context.getPackageManager().getApplicationInfo(packageName, 0);
-            if (ai != null) appStatus = ai.enabled;
+            result.success(ai.enabled);
         } catch (PackageManager.NameNotFoundException e) {
             result.error("", e.getMessage() + " " + packageName, e);
-            return;
         }
-        result.success(appStatus);
     }
 
     @TargetApi(Build.VERSION_CODES.CUPCAKE)
@@ -153,6 +147,6 @@ public class AppAvailability implements FlutterPlugin, MethodCallHandler, Activi
                 return;
             }
         }
-        result.error("", "App not found " + packageName, null);
+        result.error("", "App not found: " + packageName, null);
     }
 }
