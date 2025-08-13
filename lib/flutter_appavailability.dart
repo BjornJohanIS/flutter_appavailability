@@ -47,7 +47,7 @@ class AppAvailability {
       };
     }
 
-    return null;
+    return <String, String>{};
   }
 
   /// Only for **Android**.
